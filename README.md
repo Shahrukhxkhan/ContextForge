@@ -7,8 +7,6 @@ Before that, make sure you grab your FireCrawl API keys to search the web.
 **Get API Keys**:
    - [FireCrawl](https://www.firecrawl.dev/i/api)
 
-### Watch Demo on YouTube
-[![Watch Demo on YouTube](https://github.com/patchy631/ai-engineering-hub/blob/main/agentic_rag/thumbnail/thumbnail.png)](https://youtu.be/O4yBW_GTRk0)
 
 
 ## Installation and setup
