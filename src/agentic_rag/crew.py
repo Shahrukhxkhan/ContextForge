@@ -5,8 +5,15 @@ from crewai_tools import PDFSearchTool
 # from tools.custom_tool import DocumentSearchTool
 from agentic_rag.tools.custom_tool import DocumentSearchTool
 
-# Initialize the tool with a specific PDF path for exclusive search within that document
-pdf_tool = DocumentSearchTool(pdf='/Users/akshaypachaar/Eigen/ai-engineering/agentic_rag/knowledge/dspy.pdf')
+import os
+from pathlib import Path
+
+# Resolve knowledge/dspy.pdf dynamically relative to ContextForge root
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+default_pdf_path = str(ROOT_DIR / "knowledge" / "dspy.pdf")
+
+# Initialize the tool with the PDF path for exclusive search within that document
+pdf_tool = DocumentSearchTool(file_path=default_pdf_path)
 web_search_tool = SerperDevTool()
 
 @CrewBase

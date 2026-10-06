@@ -15,11 +15,12 @@ class DocumentSearchTool(BaseTool):
     description: str = "Search the document for the given query."
     args_schema: Type[BaseModel] = DocumentSearchToolInput
     
-    model_config = ConfigDict(extra="allow")
-    def __init__(self, file_path: str):
+    def __init__(self, file_path: str = None, pdf: str = None):
         """Initialize the searcher with a PDF file path and set up the Qdrant collection."""
         super().__init__()
-        self.file_path = file_path
+        self.file_path = file_path or pdf
+        if not self.file_path:
+            raise ValueError("Either file_path or pdf must be provided to DocumentSearchTool.")
         self.client = QdrantClient(":memory:")  # For small experiments
         self._process_document()
 
@@ -65,10 +66,36 @@ class DocumentSearchTool(BaseTool):
         separator = "\n___\n"
         return separator.join(docs)
 
+class FireCrawlWebSearchToolInput(BaseModel):
+    """Input schema for FireCrawlWebSearchTool."""
+    query: str = Field(..., description="Query to search the web using FireCrawl.")
+
+class FireCrawlWebSearchTool(BaseTool):
+    name: str = "FireCrawlWebSearchTool"
+    description: str = "Search the web using FireCrawl for a query when information is not in the document."
+    args_schema: Type[BaseModel] = FireCrawlWebSearchToolInput
+
+    model_config = ConfigDict(extra="allow")
+
+    def __init__(self, api_key: str = None):
+        super().__init__()
+        self.api_key = api_key or os.getenv("FIRECRAWL_API_KEY")
+
+    def _run(self, query: str) -> str:
+        """Execute web search using FirecrawlSearchTool if available or FirecrawlApp directly."""
+        try:
+            from crewai_tools import FirecrawlSearchTool
+            tool = FirecrawlSearchTool(api_key=self.api_key) if self.api_key else FirecrawlSearchTool()
+            return str(tool._run(query=query))
+        except Exception as e:
+            # Fallback or informative error if FireCrawl API is unconfigured/fails
+            return f"Error executing FireCrawl web search: {str(e)}. Please verify your FIRECRAWL_API_KEY in .env."
+
 # Test the implementation
 def test_document_searcher():
-    # Test file path
-    pdf_path = "/Users/akshaypachaar/Eigen/ai-engineering/agentic_rag/knowledge/dspy.pdf"
+    # Resolve knowledge/dspy.pdf dynamically relative to repository root
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    pdf_path = os.path.join(base_dir, "knowledge", "dspy.pdf")
     
     # Create instance
     searcher = DocumentSearchTool(file_path=pdf_path)
@@ -79,3 +106,4 @@ def test_document_searcher():
 
 if __name__ == "__main__":
     test_document_searcher()
+
