@@ -1,9 +1,21 @@
 import streamlit as st
 import os
+import sys
 import tempfile
 import gc
 import base64
 import time
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Add repository root and src directory to sys.path
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+if str(BASE_DIR / "src") not in sys.path:
+    sys.path.insert(0, str(BASE_DIR / "src"))
 
 from crewai import Agent, Crew, Process, Task
 from crewai_tools import SerperDevTool
@@ -138,9 +150,14 @@ with st.sidebar:
 # ===========================
 #   Main Chat Interface
 # ===========================
-st.markdown("""
-    # Agentic RAG powered by <img src="data:image/png;base64,{}" width="120" style="vertical-align: -3px;">
-""".format(base64.b64encode(open("assets/crewai.png", "rb").read()).decode()), unsafe_allow_html=True)
+crewai_logo_path = os.path.join(BASE_DIR, "assets", "crewai.png")
+if os.path.exists(crewai_logo_path):
+    encoded_logo = base64.b64encode(open(crewai_logo_path, "rb").read()).decode()
+    st.markdown(f"""
+        # Agentic RAG powered by <img src="data:image/png;base64,{encoded_logo}" width="120" style="vertical-align: -3px;">
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("# Agentic RAG powered by CrewAI")
 
 # Render existing conversation
 for message in st.session_state.messages:

@@ -1,9 +1,21 @@
 import streamlit as st
 import os
+import sys
 import tempfile
 import gc
 import base64
 import time
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Add repository root and src directory to sys.path
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+if str(BASE_DIR / "src") not in sys.path:
+    sys.path.insert(0, str(BASE_DIR / "src"))
 
 from crewai import Agent, Crew, Process, Task, LLM
 from src.agentic_rag.tools.custom_tool import FireCrawlWebSearchTool
