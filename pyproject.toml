@@ -1,8 +1,9 @@
 [project]
-name = "agentic_rag"
+name = "contextforge"
 version = "0.1.0"
-description = "agentic-rag using crewAI"
-authors = [{ name = "Your Name", email = "you@example.com" }]
+description = "ContextForge: An agentic RAG system powered by CrewAI with local Qdrant vector storage, hybrid retrieval, cross-encoder reranking, and web search fallback"
+authors = [{ name = "Muhammad Shahrukh Khan" }]
+readme = "README.md"
 requires-python = ">=3.10,<=3.13"
 dependencies = [
     "crewai[tools]>=0.86.0,<1.0.0",
@@ -15,12 +16,14 @@ dependencies = [
 ]
 
 [project.scripts]
-agentic_rag = "agentic_rag.main:run"
-run_crew = "agentic_rag.main:run"
-train = "agentic_rag.main:train"
-replay = "agentic_rag.main:replay"
-test = "agentic_rag.main:test"
+contextforge = "agentic_rag.main:run"
+contextforge-train = "agentic_rag.main:train"
+contextforge-replay = "agentic_rag.main:replay"
+contextforge-test = "agentic_rag.main:test"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentic_rag"]
