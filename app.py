@@ -389,6 +389,36 @@ if prompt:
 
             except Exception as e:
                 status_box.update(label="❌ Error executing query", state="error", expanded=True)
-                err_msg = f"**Error executing query:** {str(e)}"
+                err_str = str(e)
+
+                # Provide actionable guidance for common local Ollama and API issues
+                if "11434" in err_str or "ConnectError" in err_str or "connection refused" in err_str.lower():
+                    friendly_help = f"""
+❌ **Could not connect to Ollama** at `{ollama_url}`:
+- Ensure the Ollama service is running on your machine:
+  ```bash
+  ollama serve
+  ```
+- If running in Docker or another host, verify the **Ollama Host URL** in the sidebar.
+"""
+                    err_msg = friendly_help
+                elif "not found" in err_str.lower() and ("model" in err_str.lower() or "ollama" in err_str.lower()):
+                    target_model = custom_model_name.strip() if model_choice == "Ollama: Custom" else model_choice.replace("Ollama: ", "").lower()
+                    friendly_help = f"""
+❌ **Model not found in Ollama**:
+- Run the following in your terminal to pull the model:
+  ```bash
+  ollama pull {target_model}
+  ```
+"""
+                    err_msg = friendly_help
+                elif "OPENAI_API_KEY" in err_str or "api_key" in err_str.lower() and "openai" in err_str.lower():
+                    err_msg = """
+❌ **OpenAI API Key Missing or Invalid**:
+- Please ensure `OPENAI_API_KEY` is defined in your `.env` file or switch to an Ollama local model in the sidebar.
+"""
+                else:
+                    err_msg = f"**Error executing query:** {err_str}"
+
                 message_placeholder.error(err_msg)
                 current_chat.append({"role": "assistant", "content": err_msg, "citations": []})
