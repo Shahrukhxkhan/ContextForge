@@ -28,11 +28,13 @@ class AgenticRag():
 	agents_config = 'config/agents.yaml'
 	tasks_config = 'config/tasks.yaml'
 
-	def __init__(self, pdf_tool=None, web_search_tool=None, llm=None, enable_verification=True):
+	def __init__(self, pdf_tool=None, web_search_tool=None, llm=None, enable_verification=True, step_callback=None, task_callback=None):
 		self.pdf_tool = pdf_tool or DocumentSearchTool(file_path=default_pdf_path)
 		self.web_search_tool = web_search_tool or SerperDevTool()
 		self.llm = llm
 		self.enable_verification = enable_verification
+		self.step_callback = step_callback
+		self.task_callback = task_callback
 
 	@agent
 	def router_agent(self) -> Agent:
@@ -127,9 +129,15 @@ class AgenticRag():
 				self.response_task()
 			]
 
-		return Crew(
+		crew_kwargs = dict(
 			agents=active_agents,
 			tasks=active_tasks,
 			process=Process.sequential,
 			verbose=True,
 		)
+		if self.step_callback:
+			crew_kwargs["step_callback"] = self.step_callback
+		if self.task_callback:
+			crew_kwargs["task_callback"] = self.task_callback
+
+		return Crew(**crew_kwargs)
