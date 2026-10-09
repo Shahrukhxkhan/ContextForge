@@ -91,6 +91,30 @@ class FireCrawlWebSearchTool(BaseTool):
             # Fallback or informative error if FireCrawl API is unconfigured/fails
             return f"Error executing FireCrawl web search: {str(e)}. Please verify your FIRECRAWL_API_KEY in .env."
 
+def get_web_search_tool(provider: str = "auto"):
+    """
+    Factory helper to return an initialized web search tool.
+    Supports 'serper', 'firecrawl', or 'auto' (detects based on available API keys).
+    """
+    provider_lower = (provider or "auto").lower()
+
+    if provider_lower == "firecrawl":
+        return FireCrawlWebSearchTool()
+    elif provider_lower == "serper":
+        from crewai_tools import SerperDevTool
+        return SerperDevTool()
+    else:
+        # Auto-detect priority: Serper if key present, else Firecrawl if key present, else SerperDevTool
+        if os.getenv("SERPER_API_KEY"):
+            from crewai_tools import SerperDevTool
+            return SerperDevTool()
+        elif os.getenv("FIRECRAWL_API_KEY"):
+            return FireCrawlWebSearchTool()
+        else:
+            from crewai_tools import SerperDevTool
+            return SerperDevTool()
+
+
 # Test the implementation
 def test_document_searcher():
     # Resolve knowledge/dspy.pdf dynamically relative to repository root

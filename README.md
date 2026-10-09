@@ -23,7 +23,15 @@ Before that, make sure you grab your FireCrawl API keys to search the web.
 
 **Running the app**:
 
-To use deep-seek-rq use command ``` streamlit run app_deep_seek.py ```, for llama 3.2 use command ``` streamlit run app_llama3.2.py ```
+Launch the unified Streamlit interface:
+```bash
+streamlit run app.py
+```
+
+From the sidebar in the app, you can:
+- **Select LLM:** Choose between OpenAI (default), Ollama local models (`deepseek-r1:7b`, `llama3.2`), or any custom Ollama model.
+- **Select Search Tool:** Toggle between Serper and FireCrawl (with auto-detection based on configured keys).
+- **Upload Knowledge:** Upload your PDF document to index it into local vector memory.
 
 ---
 

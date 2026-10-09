@@ -17,95 +17,48 @@ if str(BASE_DIR) not in sys.path:
 if str(BASE_DIR / "src") not in sys.path:
     sys.path.insert(0, str(BASE_DIR / "src"))
 
-from crewai import Agent, Crew, Process, Task
-from crewai_tools import SerperDevTool
-from src.agentic_rag.tools.custom_tool import DocumentSearchTool
+from crewai import LLM
+from src.agentic_rag.crew import AgenticRag
+from src.agentic_rag.tools.custom_tool import DocumentSearchTool, get_web_search_tool
 
 # ===========================
-#   Define Agents & Tasks
+#   Streamlit Page Config
 # ===========================
-def create_agents_and_tasks(pdf_tool):
-    """Creates a Crew with the given PDF tool (if any) and a web search tool."""
-    web_search_tool = SerperDevTool()
-
-    retriever_agent = Agent(
-        role="Retrieve relevant information to answer the user query: {query}",
-        goal=(
-            "Retrieve the most relevant information from the available sources "
-            "for the user query: {query}. Always try to use the PDF search tool first. "
-            "If you are not able to retrieve the information from the PDF search tool, "
-            "then try to use the web search tool."
-        ),
-        backstory=(
-            "You're a meticulous analyst with a keen eye for detail. "
-            "You're known for your ability to understand user queries: {query} "
-            "and retrieve knowledge from the most suitable knowledge base."
-        ),
-        verbose=True,
-        tools=[t for t in [pdf_tool, web_search_tool] if t],
-    )
-
-    response_synthesizer_agent = Agent(
-        role="Response synthesizer agent for the user query: {query}",
-        goal=(
-            "Synthesize the retrieved information into a concise and coherent response "
-            "based on the user query: {query}. If you are not able to retrieve the "
-            'information then respond with "I\'m sorry, I couldn\'t find the information '
-            'you\'re looking for."'
-        ),
-        backstory=(
-            "You're a skilled communicator with a knack for turning "
-            "complex information into clear and concise responses."
-        ),
-        verbose=True
-    )
-
-    retrieval_task = Task(
-        description=(
-            "Retrieve the most relevant information from the available "
-            "sources for the user query: {query}"
-        ),
-        expected_output=(
-            "The most relevant information in the form of text as retrieved "
-            "from the sources."
-        ),
-        agent=retriever_agent
-    )
-
-    response_task = Task(
-        description="Synthesize the final response for the user query: {query}",
-        expected_output=(
-            "A concise and coherent response based on the retrieved information "
-            "from the right source for the user query: {query}. If you are not "
-            "able to retrieve the information, then respond with: "
-            '"I\'m sorry, I couldn\'t find the information you\'re looking for."'
-        ),
-        agent=response_synthesizer_agent
-    )
-
-    crew = Crew(
-        agents=[retriever_agent, response_synthesizer_agent],
-        tasks=[retrieval_task, response_task],
-        process=Process.sequential,  # or Process.hierarchical
-        verbose=True
-    )
-    return crew
+st.set_page_config(
+    page_title="ContextForge - Agentic RAG",
+    page_icon="🤖",
+    layout="wide"
+)
 
 # ===========================
-#   Streamlit Setup
+#   Session State Setup
 # ===========================
 if "messages" not in st.session_state:
-    st.session_state.messages = []  # Chat history
+    st.session_state.messages = []
 
 if "pdf_tool" not in st.session_state:
-    st.session_state.pdf_tool = None  # Store the DocumentSearchTool
+    st.session_state.pdf_tool = None
 
-if "crew" not in st.session_state:
-    st.session_state.crew = None      # Store the Crew object
+if "current_file_name" not in st.session_state:
+    st.session_state.current_file_name = None
 
 def reset_chat():
     st.session_state.messages = []
     gc.collect()
+
+def get_llm_instance(model_choice: str, custom_model_name: str, ollama_url: str):
+    """Factory to get the selected LLM instance."""
+    if model_choice == "OpenAI / Default (API Key)":
+        return None  # CrewAI uses default OpenAI configuration from environment
+    elif model_choice == "Ollama: DeepSeek-R1 (7B)":
+        return LLM(model="ollama/deepseek-r1:7b", base_url=ollama_url)
+    elif model_choice == "Ollama: Llama 3.2":
+        return LLM(model="ollama/llama3.2", base_url=ollama_url)
+    elif model_choice == "Ollama: Custom":
+        clean_name = custom_model_name.strip()
+        model_tag = f"ollama/{clean_name}" if not clean_name.startswith("ollama/") else clean_name
+        return LLM(model=model_tag, base_url=ollama_url)
+    return None
 
 def display_pdf(file_bytes: bytes, file_name: str):
     """Displays the uploaded PDF in an iframe."""
@@ -114,90 +67,141 @@ def display_pdf(file_bytes: bytes, file_name: str):
     <iframe 
         src="data:application/pdf;base64,{base64_pdf}" 
         width="100%" 
-        height="600px" 
+        height="500px" 
         type="application/pdf"
     >
     </iframe>
     """
-    st.markdown(f"### Preview of {file_name}")
+    st.markdown(f"**Preview: {file_name}**")
     st.markdown(pdf_display, unsafe_allow_html=True)
 
 # ===========================
-#   Sidebar
+#   Sidebar Controls
 # ===========================
 with st.sidebar:
-    st.header("Add Your PDF Document")
-    uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
+    st.header("⚙️ Configuration")
+
+    st.subheader("1. Model Selection")
+    model_choice = st.selectbox(
+        "Choose LLM Provider / Model",
+        [
+            "OpenAI / Default (API Key)",
+            "Ollama: DeepSeek-R1 (7B)",
+            "Ollama: Llama 3.2",
+            "Ollama: Custom"
+        ],
+        index=0
+    )
+
+    ollama_url = "http://localhost:11434"
+    custom_model_name = ""
+    if "Ollama" in model_choice:
+        ollama_url = st.text_input("Ollama Host URL", value="http://localhost:11434")
+        if model_choice == "Ollama: Custom":
+            custom_model_name = st.text_input("Custom Ollama Model Name (e.g. mistral, qwen2.5)", value="")
+
+    st.subheader("2. Web Search Provider")
+    search_provider = st.selectbox(
+        "Search Tool Fallback",
+        ["Auto-detect", "Serper", "Firecrawl"],
+        index=0
+    )
+
+    st.divider()
+
+    st.subheader("3. Knowledge Base")
+    uploaded_file = st.file_uploader("Upload a PDF Document", type=["pdf"])
 
     if uploaded_file is not None:
-        # If there's a new file and we haven't set pdf_tool yet...
-        if st.session_state.pdf_tool is None:
+        if st.session_state.current_file_name != uploaded_file.name:
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_file_path = os.path.join(temp_dir, uploaded_file.name)
                 with open(temp_file_path, "wb") as f:
                     f.write(uploaded_file.getvalue())
 
-                with st.spinner("Indexing PDF... Please wait..."):
+                with st.spinner(f"Indexing '{uploaded_file.name}' into vector memory..."):
                     st.session_state.pdf_tool = DocumentSearchTool(file_path=temp_file_path)
-            
-            st.success("PDF indexed! Ready to chat.")
+                    st.session_state.current_file_name = uploaded_file.name
 
-        # Optionally display the PDF in the sidebar
-        display_pdf(uploaded_file.getvalue(), uploaded_file.name)
+            st.success(f"✓ '{uploaded_file.name}' indexed!")
 
-    st.button("Clear Chat", on_click=reset_chat)
+        with st.expander("Preview Document", expanded=False):
+            display_pdf(uploaded_file.getvalue(), uploaded_file.name)
+    else:
+        # Default bundled knowledge doc fallback if available
+        default_doc = BASE_DIR / "knowledge" / "dspy.pdf"
+        if default_doc.exists() and st.session_state.pdf_tool is None:
+            if st.button("Load default sample doc (dspy.pdf)"):
+                with st.spinner("Indexing default knowledge document..."):
+                    st.session_state.pdf_tool = DocumentSearchTool(file_path=str(default_doc))
+                    st.session_state.current_file_name = "dspy.pdf"
+                st.success("Loaded dspy.pdf sample!")
+
+    st.divider()
+    st.button("Clear Chat History", on_click=reset_chat, use_container_width=True)
 
 # ===========================
-#   Main Chat Interface
+#   Main Interface
 # ===========================
-crewai_logo_path = os.path.join(BASE_DIR, "assets", "crewai.png")
-if os.path.exists(crewai_logo_path):
+crewai_logo_path = BASE_DIR / "assets" / "crewai.png"
+if crewai_logo_path.exists():
     encoded_logo = base64.b64encode(open(crewai_logo_path, "rb").read()).decode()
     st.markdown(f"""
-        # Agentic RAG powered by <img src="data:image/png;base64,{encoded_logo}" width="120" style="vertical-align: -3px;">
+        # ContextForge <img src="data:image/png;base64,{encoded_logo}" width="110" style="vertical-align: -3px;">
     """, unsafe_allow_html=True)
 else:
-    st.markdown("# Agentic RAG powered by CrewAI")
+    st.markdown("# ContextForge - Agentic RAG")
 
-# Render existing conversation
+st.caption(f"Active Model: **{model_choice}** | Active Search: **{search_provider}** | Knowledge: **{st.session_state.current_file_name or 'No PDF loaded (Web Search only)'}**")
+
+# Render conversation history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # Chat input
-prompt = st.chat_input("Ask a question about your PDF...")
+prompt = st.chat_input("Ask a question about your document or query the web...")
 
 if prompt:
-    # 1. Show user message immediately
+    # 1. Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Build or reuse the Crew (only once after PDF is loaded)
-    if st.session_state.crew is None:
-        st.session_state.crew = create_agents_and_tasks(st.session_state.pdf_tool)
-
-    # 3. Get the response
+    # 2. Build Crew dynamically with selected LLM, Search tool, and Document tool
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
-        full_response = ""
-        
-        # Get the complete response first
-        with st.spinner("Thinking..."):
-            inputs = {"query": prompt}
-            result = st.session_state.crew.kickoff(inputs=inputs).raw
-        
-        # Split by lines first to preserve code blocks and other markdown
-        lines = result.split('\n')
-        for i, line in enumerate(lines):
-            full_response += line
-            if i < len(lines) - 1:  # Don't add newline to the last line
-                full_response += '\n'
-            message_placeholder.markdown(full_response + "▌")
-            time.sleep(0.15)  # Adjust the speed as needed
-        
-        # Show the final response without the cursor
-        message_placeholder.markdown(full_response)
 
-    # 4. Save assistant's message to session
-    st.session_state.messages.append({"role": "assistant", "content": result})
+        with st.spinner("Analyzing document and web sources..."):
+            try:
+                selected_llm = get_llm_instance(model_choice, custom_model_name, ollama_url)
+                provider_key = "auto" if search_provider == "Auto-detect" else search_provider.lower()
+                web_tool = get_web_search_tool(provider=provider_key)
+
+                # Initialize unified CrewBase crew
+                agentic_crew = AgenticRag(
+                    pdf_tool=st.session_state.pdf_tool,
+                    web_search_tool=web_tool,
+                    llm=selected_llm
+                ).crew()
+
+                inputs = {"query": prompt}
+                result = agentic_crew.kickoff(inputs=inputs).raw
+
+                # Render with streaming simulation effect
+                full_response = ""
+                lines = str(result).split('\n')
+                for i, line in enumerate(lines):
+                    full_response += line
+                    if i < len(lines) - 1:
+                        full_response += '\n'
+                    message_placeholder.markdown(full_response + "▌")
+                    time.sleep(0.04)
+
+                message_placeholder.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+            except Exception as e:
+                err_msg = f"**Error executing query:** {str(e)}"
+                message_placeholder.error(err_msg)
+                st.session_state.messages.append({"role": "assistant", "content": err_msg})

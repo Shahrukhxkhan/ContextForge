@@ -22,10 +22,6 @@ except (ImportError, ValueError):
 ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 default_pdf_path = str(ROOT_DIR / "knowledge" / "dspy.pdf")
 
-# Initialize the tool with the PDF path for exclusive search within that document
-pdf_tool = DocumentSearchTool(file_path=default_pdf_path)
-web_search_tool = SerperDevTool()
-
 @CrewBase
 class AgenticRag():
 	"""AgenticRag crew"""
@@ -33,38 +29,32 @@ class AgenticRag():
 	agents_config = 'config/agents.yaml'
 	tasks_config = 'config/tasks.yaml'
 
-	# If you would like to add tools to your agents, you can learn more about it here:
-	# https://docs.crewai.com/concepts/agents#agent-tools
-	# @agent
-	# def routing_agent(self) -> Agent:
-	# 	return Agent(
-	# 		config=self.agents_config['routing_agent'],
-	# 		verbose=True
-	# 	)
+	def __init__(self, pdf_tool=None, web_search_tool=None, llm=None):
+		super().__init__()
+		self.pdf_tool = pdf_tool or DocumentSearchTool(file_path=default_pdf_path)
+		self.web_search_tool = web_search_tool or SerperDevTool()
+		self.llm = llm
 
 	@agent
 	def retriever_agent(self) -> Agent:
-		return Agent(
+		agent_kwargs = dict(
 			config=self.agents_config['retriever_agent'],
 			verbose=True,
-			tools=[
-				pdf_tool,
-				web_search_tool
-			]
+			tools=[t for t in [self.pdf_tool, self.web_search_tool] if t]
 		)
+		if self.llm:
+			agent_kwargs['llm'] = self.llm
+		return Agent(**agent_kwargs)
 
 	@agent
 	def response_synthesizer_agent(self) -> Agent:
-		return Agent(
+		agent_kwargs = dict(
 			config=self.agents_config['response_synthesizer_agent'],
 			verbose=True
 		)
-
-	# @task
-	# def routing_task(self) -> Task:
-	# 	return Task(
-	# 		config=self.tasks_config['routing_task'],
-	# 	)
+		if self.llm:
+			agent_kwargs['llm'] = self.llm
+		return Agent(**agent_kwargs)
 
 	@task
 	def retrieval_task(self) -> Task:
@@ -81,13 +71,9 @@ class AgenticRag():
 	@crew
 	def crew(self) -> Crew:
 		"""Creates the AgenticRag crew"""
-		# To learn how to add knowledge sources to your crew, check out the documentation:
-		# https://docs.crewai.com/concepts/knowledge#what-is-knowledge
-
 		return Crew(
 			agents=self.agents, # Automatically created by the @agent decorator
-			tasks=self.tasks, # Automatically created by the @task decorator
+			tasks=self.tasks,   # Automatically created by the @task decorator
 			process=Process.sequential,
 			verbose=True,
-			# process=Process.hierarchical, # In case you wanna use that instead https://docs.crewai.com/how-to/Hierarchical/
 		)
