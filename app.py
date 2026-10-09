@@ -113,6 +113,7 @@ with st.sidebar:
     chunk_size = st.slider("Chunk Size", min_value=128, max_value=1024, value=512, step=64)
     top_k = st.slider("Top Chunks (k)", min_value=1, max_value=10, value=5)
     enable_rerank = st.checkbox("Cross-Encoder Re-ranking", value=True, help="Re-ranks candidate chunks using FastEmbed ms-marco-MiniLM cross-encoder for sharper relevance.")
+    enable_verification = st.checkbox("Hallucination Grader / Groundedness Verifier", value=True, help="Audits response against retrieved facts and marks verification badge.")
     storage_mode = st.radio("Vector Store Mode", ["Persistent Disk", "In-Memory"], index=0, horizontal=True)
 
     st.divider()
@@ -221,7 +222,8 @@ if prompt:
                 agentic_crew = AgenticRag(
                     pdf_tool=st.session_state.doc_tool,
                     web_search_tool=web_tool,
-                    llm=selected_llm
+                    llm=selected_llm,
+                    enable_verification=enable_verification
                 ).crew()
 
                 inputs = {"query": prompt}

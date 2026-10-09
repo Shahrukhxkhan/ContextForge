@@ -1,7 +1,6 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 from crewai_tools import SerperDevTool
-from crewai_tools import PDFSearchTool
 import os
 import sys
 from pathlib import Path
@@ -24,16 +23,26 @@ default_pdf_path = str(ROOT_DIR / "knowledge" / "dspy.pdf")
 
 @CrewBase
 class AgenticRag():
-	"""AgenticRag crew"""
+	"""AgenticRag crew featuring routing, retrieval, synthesis, and verification."""
 
 	agents_config = 'config/agents.yaml'
 	tasks_config = 'config/tasks.yaml'
 
-	def __init__(self, pdf_tool=None, web_search_tool=None, llm=None):
-		super().__init__()
+	def __init__(self, pdf_tool=None, web_search_tool=None, llm=None, enable_verification=True):
 		self.pdf_tool = pdf_tool or DocumentSearchTool(file_path=default_pdf_path)
 		self.web_search_tool = web_search_tool or SerperDevTool()
 		self.llm = llm
+		self.enable_verification = enable_verification
+
+	@agent
+	def router_agent(self) -> Agent:
+		agent_kwargs = dict(
+			config=self.agents_config['router_agent'],
+			verbose=True
+		)
+		if self.llm:
+			agent_kwargs['llm'] = self.llm
+		return Agent(**agent_kwargs)
 
 	@agent
 	def retriever_agent(self) -> Agent:
@@ -56,6 +65,22 @@ class AgenticRag():
 			agent_kwargs['llm'] = self.llm
 		return Agent(**agent_kwargs)
 
+	@agent
+	def hallucination_grader_agent(self) -> Agent:
+		agent_kwargs = dict(
+			config=self.agents_config['hallucination_grader_agent'],
+			verbose=True
+		)
+		if self.llm:
+			agent_kwargs['llm'] = self.llm
+		return Agent(**agent_kwargs)
+
+	@task
+	def routing_task(self) -> Task:
+		return Task(
+			config=self.tasks_config['routing_task'],
+		)
+
 	@task
 	def retrieval_task(self) -> Task:
 		return Task(
@@ -68,12 +93,43 @@ class AgenticRag():
 			config=self.tasks_config['response_task'],
 		)
 
+	@task
+	def verification_task(self) -> Task:
+		return Task(
+			config=self.tasks_config['verification_task'],
+		)
+
 	@crew
 	def crew(self) -> Crew:
-		"""Creates the AgenticRag crew"""
+		"""Creates the full AgenticRag crew with router, retriever, synthesizer, and verifier."""
+		if self.enable_verification:
+			active_agents = [
+				self.router_agent(),
+				self.retriever_agent(),
+				self.response_synthesizer_agent(),
+				self.hallucination_grader_agent()
+			]
+			active_tasks = [
+				self.routing_task(),
+				self.retrieval_task(),
+				self.response_task(),
+				self.verification_task()
+			]
+		else:
+			active_agents = [
+				self.router_agent(),
+				self.retriever_agent(),
+				self.response_synthesizer_agent()
+			]
+			active_tasks = [
+				self.routing_task(),
+				self.retrieval_task(),
+				self.response_task()
+			]
+
 		return Crew(
-			agents=self.agents, # Automatically created by the @agent decorator
-			tasks=self.tasks,   # Automatically created by the @task decorator
+			agents=active_agents,
+			tasks=active_tasks,
 			process=Process.sequential,
 			verbose=True,
 		)

@@ -1,20 +1,34 @@
-# routing_task:
-#   description: >
-#     Understand the user query: {query}, and route it to the most appropriate knowledge base
-#   expected_output: >
-#     The most appropriate knowledge base to route the user query to, the answer should be either 'pdf_search' or 'pdf_search'
-#   agent: routing_agent
+routing_task:
+  description: >
+    Analyze the user query: '{query}' and inspect whether it targets uploaded document knowledge or external live events/web information. Output a brief retrieval plan stating whether to search local documents first, perform web search, or combine both.
+  expected_output: >
+    A concise routing decision (e.g., ROUTE: DOCUMENT_FIRST or ROUTE: WEB_SEARCH) along with search keywords.
+  agent: router_agent
 
 retrieval_task:
   description: >
-    Retrieve the most relevant information from the available sources for the user query: {query}
+    Execute information retrieval for the user query: '{query}' guided by the routing plan.
+    First query the local document search tool. If the retrieved document context satisfies the query, formulate the context with all source citations.
+    If the document search returns insufficient information or misses the query topic, invoke the web search tool to find the required facts.
   expected_output: >
-    The most relevant information in form of text as retrieved from the sources.
+    The collected evidence and text excerpts, clearly labeled with their respective source origins:
+    '[Source: filename, Chunk: ID]' for document chunks or '[Web: URL]' for web results.
   agent: retriever_agent
 
 response_task:
   description: >
-    Synthesize the final response for the user query: {query}
+    Synthesize a coherent and authoritative response for '{query}' based strictly on the retrieved source material.
+    Every factual assertion must reference its origin using bracketed citations, and the answer must conclude with a dedicated '### Sources & Citations' section listing all referenced documents and URLs.
   expected_output: >
-    A concise and coherent response based on the retrieved information from the right source for the user query: {query}. If you are not able to retrieve the information then respond with "I'm sorry, I couldn't find the information you're looking for."
+    A comprehensive answer with inline citations and a structured Sources section.
   agent: response_synthesizer_agent
+
+verification_task:
+  description: >
+    Review the synthesized response against the raw retrieved evidence for query: '{query}'.
+    1. Score the groundedness level (e.g., Grounded / Partially Grounded / Not Grounded).
+    2. Confirm all citations correspond to actual retrieved context.
+    3. Output the finalized verified response, appending a concise '#### Verification Badge: [Grounded | Confidence: High]' at the very end.
+  expected_output: >
+    The final verified response, purged of any hallucinated claims, with intact citations and verification status.
+  agent: hallucination_grader_agent
